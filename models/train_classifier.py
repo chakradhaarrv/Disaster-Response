@@ -1,17 +1,18 @@
 import sys
 from sqlalchemy import create_engine
 import nltk
-nltk.download(['punkt', 'wordnet'])
+nltk.download(['punkt', 'wordnet', 'averaged_perceptron_tagger'])
 import re
 import numpy as np
 import pandas as pd
 from nltk.tokenize import word_tokenize
 from nltk.stem import WordNetLemmatizer
+from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.metrics import confusion_matrix, classification_report
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
-from sklearn.pipeline import Pipeline
+from sklearn.pipeline import Pipeline, FeatureUnion
 from sklearn.model_selection import GridSearchCV
 from sklearn.multioutput import MultiOutputClassifier
 import pickle
@@ -19,6 +20,16 @@ import pickle
 
 
 def load_data(database_filepath):
+    """
+    Load Data Function
+    
+    Arguments:
+        database_filepath -> path to SQLite db
+    Output:
+        X -> features DataFrame
+        y -> labels DataFrame
+        category_names -> used for data visualization (app)
+    """
     engine = create_engine('sqlite:///'+database_filepath)
     df = pd.read_sql_table('DisasterResponse', engine)
     X = df.message
@@ -28,6 +39,14 @@ def load_data(database_filepath):
 
 
 def tokenize(text):
+    """
+    Tokenize function
+    
+    Arguments:
+        text -> list of texts obtained, in English
+    Output:
+        clean_tokens -> tokenized text, clean for ML modeling
+    """
     url_regex = 'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
     detected_urls = re.findall(url_regex, text)
     for url in detected_urls:
@@ -43,21 +62,46 @@ def tokenize(text):
 
     return clean_tokens
 
+class StartingVerbExtractor(BaseEstimator, TransformerMixin):
+    """
+    Starting Verb Extractor class
+    
+    Class extracts the starting verb of a sentence and
+    creates a new feature for the ML classifier
+    """
+
+    def starting_verb(self, text):
+        sentence_list = nltk.sent_tokenize(text)
+        for sentence in sentence_list:
+            pos_tags = nltk.pos_tag(tokenize(sentence))
+            first_word, first_tag = pos_tags[0]
+            if first_tag in ['VB', 'VBP'] or first_word == 'RT':
+                return True
+        return False
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X):
+        X_tagged = pd.Series(X).apply(self.starting_verb)
+        return pd.DataFrame(X_tagged)
 
 def build_model():
     pipeline = Pipeline([
-        ('vect', CountVectorizer(tokenizer=tokenize)),
-        ('tfidf', TfidfTransformer()),
+        ('features', FeatureUnion([
+
+            ('text_pipeline', Pipeline([
+                ('vect', CountVectorizer(tokenizer=tokenize)),
+                ('tfidf', TfidfTransformer())
+            ])),
+
+            ('starting_verb', StartingVerbExtractor())
+        ])),
+
         ('clf', MultiOutputClassifier(RandomForestClassifier()))
     ])
-    # Previous parameters are 'clf__estimator__min_samples_split': 3, 'clf__estimator__n_estimators': 150.
-    parameters = {
-        'clf__estimator__n_estimators': [10],
-        'clf__estimator__min_samples_split': [2],
     
-    }
-    model = GridSearchCV(pipeline, param_grid=parameters, n_jobs=4, verbose=2, cv=3)
-    return model
+    return pipeline
 
 
 def evaluate_model(model, X_test, Y_test, category_names):

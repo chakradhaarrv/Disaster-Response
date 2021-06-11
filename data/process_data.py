@@ -3,12 +3,32 @@ import pandas as pd
 from sqlalchemy import create_engine
 
 def load_data(messages_filepath, categories_filepath):
+    """
+    Load Data function
+    
+    Arguments:
+        messages_filepath -> path to messages csv file
+        categories_filepath -> path to categories csv file
+    Output:
+        df -> Loaded data as a DataFrame
+    """
     messages = pd.read_csv(messages_filepath)
     categories = pd.read_csv(categories_filepath)
     df = messages.merge(categories, left_on='id', right_on='id', how='inner')
-    categories = categories.categories.str.split(';', expand=True)
-    row = categories[0:1]
-    category_colnames = row.apply(lambda x: x.str[:-2]).values.tolist()
+    return df
+
+def clean_data(df):
+    """
+    Clean Data function
+    
+    Arguments:
+        df -> raw data Pandas DataFrame
+    Outputs:
+        df -> clean data Pandas DataFrame
+    """
+    categories = df.categories.str.split(';', expand=True)
+    row = categories.iloc[0,:]
+    category_colnames = row.apply(lambda x:x[:-2])
     categories.columns = category_colnames
     for column in categories:
         categories[column] = categories[column].str[-1]
@@ -16,20 +36,32 @@ def load_data(messages_filepath, categories_filepath):
     categories.replace(2, 1, inplace=True)
     df.drop(['categories'], axis=1, inplace=True)
     df = pd.concat([df, categories], axis=1)
-    return df
-
-def clean_data(df):
     df = df.drop_duplicates()
     df = df.dropna()
     return df
 
 
 def save_data(df, database_filename):
+    """
+    Save Data function
+    
+    Arguments:
+        df -> Clean Pandas DataFrame
+        database_filename -> database file (.db) destination path
+    """
     engine = create_engine('sqlite:///'+database_filename)
     df.to_sql('DisasterResponse', engine,if_exists = 'replace', index=False)  
 
 
 def main():
+    """
+    Main Data Processing function
+    
+    This function implement the ETL pipeline:
+        1) Data extraction from .csv
+        2) Data cleaning and pre-processing
+        3) Data loading to SQLite database
+    """
     if len(sys.argv) == 4:
 
         messages_filepath, categories_filepath, database_filepath = sys.argv[1:]
