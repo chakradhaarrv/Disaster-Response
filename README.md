@@ -104,3 +104,11 @@ Using a standard desktop/laptop (4 CPUs, RAM 8Gb or above) it may take several h
 
 * [Udacity](https://www.udacity.com/) for providing such a complete Data Science Nanodegree Program
 * [Figure Eight](https://www.figure-eight.com/) for providing messages dataset to train my model
+
+## 10. Screenshots
+
+1. This is an example of a message you can type to test Machine Learning model performance
+
+![Sample Output](DR1.png)
+
+![Sample Output Continued](DR2.png)

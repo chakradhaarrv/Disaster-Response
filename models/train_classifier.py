@@ -87,35 +87,86 @@ class StartingVerbExtractor(BaseEstimator, TransformerMixin):
         return pd.DataFrame(X_tagged)
 
 def build_model():
+    """
+    Build Model function
+    
+    This function output is a Scikit ML Pipeline that process text messages
+    according to NLP best-practice and apply a classifier.
+    """
+    #pipeline = Pipeline([
+    #    ('features', FeatureUnion([
+
+    #        ('text_pipeline', Pipeline([
+    #            ('vect', CountVectorizer(tokenizer=tokenize)),
+    #            ('tfidf', TfidfTransformer())
+    #        ])),
+
+    #        ('starting_verb', StartingVerbExtractor())
+    #    ])),
+
+    #    ('clf', MultiOutputClassifier(RandomForestClassifier()))
+    #]) #AttributeError: module '__main__' has no attribute 'StartingVerbExtractor'
+    #See https://rebeccabilbro.github.io/module-main-has-no-attribute/
     pipeline = Pipeline([
-        ('features', FeatureUnion([
-
-            ('text_pipeline', Pipeline([
-                ('vect', CountVectorizer(tokenizer=tokenize)),
-                ('tfidf', TfidfTransformer())
-            ])),
-
-            ('starting_verb', StartingVerbExtractor())
-        ])),
-
+        ('vect', CountVectorizer(tokenizer=tokenize)),
+        ('tfidf', TfidfTransformer()),
         ('clf', MultiOutputClassifier(RandomForestClassifier()))
     ])
     
-    return pipeline
+    parameters = {
+        'clf__estimator__n_estimators': [10],
+        'clf__estimator__min_samples_split': [2],
+    
+    }
+    model = GridSearchCV(pipeline, param_grid=parameters, n_jobs=4, verbose=2, cv=3)
+    
+    return model
 
 
 def evaluate_model(model, X_test, Y_test, category_names):
+    """
+    Evaluate Model function
+    
+    The function applies ML pipeline to a test set and prints out
+    the model performance (accuracy and f1score)
+    
+    Arguments:
+        model -> Scikit ML Pipeline
+        X_test -> test features
+        Y_test -> test labels
+        category_names -> label names (multi-output)
+    """
     y_pred = model.predict(X_test)
     class_report = classification_report(Y_test, y_pred, target_names=category_names)
     print(class_report)
 
 
 def save_model(model, model_filepath):
+    """
+    Save Model function
+    
+    The function saves the trained model as a pickle file which is loaded later.
+    
+    Arguments:
+        model -> GridSearchCV or Scikit Pipelin object
+        model_filepath -> destination path to save .pkl file
+    
+    """
     with open(model_filepath, 'wb') as file:
         pickle.dump(model, file)
 
 
 def main():
+    """
+    Train Classifier Main function
+    
+    This function applies the Machine Learning Pipeline:
+        1) Extracts data from SQLite db
+        2) Trains ML model on training set
+        3) Estimates model performance on test set
+        4) Saves trained model as Pickle
+    
+    """
     if len(sys.argv) == 3:
         database_filepath, model_filepath = sys.argv[1:]
         print('Loading data...\n    DATABASE: {}'.format(database_filepath))
